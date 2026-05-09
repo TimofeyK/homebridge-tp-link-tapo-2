@@ -1,1 +1,0 @@
-{"version":3,"file":"translateColorTemp.d.ts","sourceRoot":"","sources":["../../src/utils/translateColorTemp.ts"],"names":[],"mappings":"AAAA,UAAU,MAAM;IACd,GAAG,EAAE,MAAM,CAAC;IACZ,GAAG,EAAE,MAAM,CAAC;CACb;AAED,eAAO,MAAM,cAAc,EAAE,MAG5B,CAAC;AAEF,eAAO,MAAM,eAAe,EAAE,MAG7B,CAAC;AAOF,eAAO,MAAM,eAAe,GAAI,OAAO,MAAM,WAK5C,CAAC;AACF,eAAO,MAAM,cAAc,GAAI,OAAO,MAAM,WAK3C,CAAC"}

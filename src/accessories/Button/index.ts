@@ -15,7 +15,6 @@ export type AccessoryThisType = ThisType<{
 }>;
 
 export default class ButtonAccessory extends Accessory {
-  private interval?: NodeJS.Timeout;
   private lastEventUpdate = 0;
 
   public get UUID() {
@@ -108,10 +107,6 @@ export default class ButtonAccessory extends Accessory {
     };
 
     this.setup(() => checkStatus());
-  }
-
-  cleanup() {
-    clearInterval(this.interval!);
   }
 
   private async setup(callback: () => void) {

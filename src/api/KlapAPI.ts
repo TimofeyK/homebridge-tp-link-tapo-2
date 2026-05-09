@@ -1,13 +1,18 @@
 import { Logger } from 'homebridge';
 import AsyncLock from 'async-lock';
 import crypto from 'crypto';
+import http from 'http';
 
 import KlapCipher from './KlapCipher';
 
-export default class KlapAPI {
-  private static readonly TP_TEST_USER = 'test@tp-link.net';
-  private static readonly TP_TEST_PASSWORD = 'test';
+interface HttpResponse {
+  status: number;
+  ok: boolean;
+  headers: http.IncomingHttpHeaders;
+  data: Buffer;
+}
 
+export default class KlapAPI {
   private readonly lock: AsyncLock;
   private readonly rawEmail: string;
   private readonly rawPassword: string;
@@ -45,21 +50,11 @@ export default class KlapAPI {
     const requestData = this.session!.cipher!.encrypt(rawRequest);
 
     try {
-      const url = new URL(`http://${this.ip}/app/request`);
-      url.searchParams.set('seq', requestData.seq.toString());
-
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          Host: this.ip,
-          Accept: '*/*',
-          'Content-Type': 'application/octet-stream',
-          'Content-Length': requestData.encrypted.length.toString(),
-          Connection: 'close',
-          Cookie: this.session!.Cookie
-        },
-        body: requestData.encrypted
-      });
+      const response = await this.sessionPost(
+        `/request?seq=${requestData.seq}`,
+        requestData.encrypted,
+        this.session!.Cookie
+      );
 
       if (!response.ok) {
         if (response.status === 403 && !forceHandshake) {
@@ -69,14 +64,13 @@ export default class KlapAPI {
         throw new Error(`[KLAP] Request failed with status ${response.status}`);
       }
 
-      const responseBuffer = Buffer.from(await response.arrayBuffer());
-      const data = JSON.parse(this.session!.cipher!.decrypt(responseBuffer));
+      const data = JSON.parse(this.session!.cipher!.decrypt(response.data));
 
       return {
         body: data
       };
     } catch (error: any) {
-      if (error.cause?.code === 'ECONNREFUSED' || error.message?.includes('fetch failed')) {
+      if (error.code === 'ECONNREFUSED') {
         throw new Error(`[KLAP] Request failed: ${error.message}`);
       }
       throw error;
@@ -123,18 +117,20 @@ export default class KlapAPI {
     );
 
     if (!handshake1Result.ok) {
-      const body = await handshake1Result.text().catch(() => '');
       throw new Error(
-        `Handshake1 failed with status ${handshake1Result.status}: ${body}`
+        `Handshake1 failed with status ${handshake1Result.status}: ${handshake1Result.data.toString()}`
       );
     }
 
-    if (handshake1Result.headers.get('content-length') !== '48') {
+    const contentLength = handshake1Result.headers['content-length'];
+    if (contentLength !== '48') {
       throw new Error('Handshake1 failed due to invalid content length');
     }
 
-    const cookie = handshake1Result.headers.get('set-cookie');
-    const data = Buffer.from(await handshake1Result.arrayBuffer());
+    const cookie = Array.isArray(handshake1Result.headers['set-cookie'])
+      ? handshake1Result.headers['set-cookie'][0]
+      : handshake1Result.headers['set-cookie'];
+    const data = handshake1Result.data;
 
     const [cookieValue, timeout] = cookie!.split(';');
     const timeoutValue = timeout.split('=').pop();
@@ -157,36 +153,6 @@ export default class KlapAPI {
         localSeed,
         remoteSeed,
         authHash: localHash
-      };
-    }
-
-    const emptyHash = this.sha256(
-      Buffer.concat([localSeed, remoteSeed, this.hashAuth('', '')])
-    );
-
-    if (Buffer.compare(emptyHash, serverHash) === 0) {
-      this.log.debug('[KLAP] [WARN] Empty auth hash matches server hash');
-      return {
-        localSeed,
-        remoteSeed,
-        authHash: emptyHash
-      };
-    }
-
-    const testHash = this.sha256(
-      Buffer.concat([
-        localSeed,
-        remoteSeed,
-        this.hashAuth(KlapAPI.TP_TEST_USER, KlapAPI.TP_TEST_PASSWORD)
-      ])
-    );
-
-    if (Buffer.compare(testHash, serverHash) === 0) {
-      this.log.debug('[KLAP] [WARN] Test auth hash matches server hash');
-      return {
-        localSeed,
-        remoteSeed,
-        authHash: testHash
       };
     }
 
@@ -219,7 +185,7 @@ export default class KlapAPI {
         return;
       }
 
-      this.log.warn('[KLAP] Second handshake failed', await handshake2Result.text());
+      this.log.warn('[KLAP] Second handshake failed', handshake2Result.data.toString());
     } catch (e: any) {
       this.log.error(
         '[KLAP] Second handshake failed:',
@@ -230,24 +196,46 @@ export default class KlapAPI {
     this.session = undefined;
   }
 
-  private async sessionPost(
+  private sessionPost(
     path: string,
     payload: Buffer,
     cookie?: string
-  ) {
-    return fetch(`http://${this.ip}/app${path}`, {
-      method: 'POST',
-      headers: {
-        Host: this.ip,
-        Accept: '*/*',
-        'Content-Type': 'application/octet-stream',
-        'Content-Length': payload.length.toString(),
-        Connection: 'close',
-        ...(cookie && {
-          Cookie: cookie
-        })
-      },
-      body: payload
+  ): Promise<HttpResponse> {
+    return new Promise((resolve, reject) => {
+      const req = http.request(
+        {
+          hostname: this.ip,
+          port: 80,
+          path: `/app${path}`,
+          method: 'POST',
+          headers: {
+            Host: this.ip,
+            Accept: '*/*',
+            'Content-Type': 'application/octet-stream',
+            'Content-Length': payload.length,
+            Connection: 'close',
+            ...(cookie && { Cookie: cookie })
+          },
+          agent: new http.Agent({ keepAlive: false })
+        },
+        (res) => {
+          const chunks: Buffer[] = [];
+          res.on('data', (chunk) => chunks.push(chunk));
+          res.on('end', () => {
+            const status = res.statusCode ?? 0;
+            resolve({
+              status,
+              ok: status >= 200 && status < 300,
+              headers: res.headers,
+              data: Buffer.concat(chunks)
+            });
+          });
+        }
+      );
+
+      req.on('error', reject);
+      req.write(payload);
+      req.end();
     });
   }
 
@@ -270,8 +258,6 @@ export default class KlapAPI {
 }
 
 class Session {
-  public readonly handshakeCompleted: boolean = false;
-
   private readonly expireAt: Date;
   private readonly rawTimeout: string;
 
@@ -282,10 +268,6 @@ class Session {
   ) {
     this.rawTimeout = timeout;
     this.expireAt = new Date(Date.now() + parseInt(timeout) * 1000);
-
-    if (cipher) {
-      this.handshakeCompleted = true;
-    }
   }
 
   public get IsExpired() {

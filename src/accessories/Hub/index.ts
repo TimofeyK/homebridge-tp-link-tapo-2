@@ -16,7 +16,6 @@ import TargetState from './characteristics/TargetState';
 export type AccessoryThisType = ThisType<{
   readonly Characteristic: typeof import('homebridge').Characteristic;
   readonly setAlarmEnabled: (value: boolean) => Promise<void>;
-  readonly alarmEnabled: boolean;
   readonly tpLink: TPLink;
   readonly log: Logger;
   readonly mac: string;

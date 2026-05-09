@@ -21,7 +21,6 @@ export type AccessoryThisType = ThisType<{
 }>;
 
 export default class ContactAccessory extends Accessory {
-  private interval?: NodeJS.Timeout;
   private lastEventUpdate = 0;
 
   public get UUID() {
@@ -93,10 +92,6 @@ export default class ContactAccessory extends Accessory {
     };
 
     this.setup((x) => checkStatus(x));
-  }
-
-  cleanup() {
-    clearInterval(this.interval!);
   }
 
   private async setup(callback: (x: Status) => void) {
