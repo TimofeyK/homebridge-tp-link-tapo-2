@@ -2,19 +2,20 @@
   "private": false,
   "displayName": "TPLink Tapo",
   "name": "homebridge-tp-link-tapo",
-  "version": "4.1.2",
+  "version": "5.0.0",
   "description": "A platform to implement the tp-link tapo device and Adaptive Lighting for light bulbs",
   "license": "Apache-2.0",
+  "author": "Timofey",
   "repository": {
     "type": "git",
-    "url": "git://github.com/RaresAil/homebridge-tp-link-tapo.git"
+    "url": "git://github.com/TimofeyK/homebridge-tp-link-tapo-2.git"
   },
   "bugs": {
-    "url": "https://github.com/RaresAil/homebridge-tp-link-tapo/issues"
+    "url": "https://github.com/TimofeyK/homebridge-tp-link-tapo-2/issues"
   },
   "engines": {
-    "homebridge": ">=1.3.9",
-    "node": ">=16.0.0"
+    "homebridge": "^2.0.0",
+    "node": "^22.12.0 || ^24.0.0"
   },
   "main": "dist/index.js",
   "scripts": {
@@ -39,14 +40,7 @@
     "smart"
   ],
   "dependencies": {
-    "async-lock": "^1.4.1",
-    "axios": "^1.7.7"
-  },
-  "resolutions": {
-    "semver": "^7.5.2",
-    "dns-packet": "^5.4.0",
-    "braces": "^3.0.3",
-    "micromatch": "^4.0.8"
+    "async-lock": "^1.4.1"
   },
   "devDependencies": {
     "@types/async-lock": "^1.4.2",
@@ -54,7 +48,7 @@
     "@typescript-eslint/eslint-plugin": "6.7.0",
     "@typescript-eslint/parser": "6.7.0",
     "eslint": "^8.49.0",
-    "homebridge": "^1.8.4",
+    "homebridge": "^2.0.0",
     "nodemon": "^3.1.7",
     "rimraf": "^6.0.1",
     "ts-node": "^10.9.2",

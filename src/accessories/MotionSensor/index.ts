@@ -106,6 +106,6 @@ export default class MotionSensorAccessory extends Accessory {
     });
     this.interval = setInterval(() => {
       callback();
-    }, 5);
+    }, 5000);
   }
 }

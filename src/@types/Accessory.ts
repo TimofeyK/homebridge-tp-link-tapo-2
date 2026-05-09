@@ -15,7 +15,7 @@ export enum AccessoryType {
 
 export enum ChildType {
   Unknown = 'Unknown',
-  Button = 'LightBulb',
+  Button = 'Button',
   Contact = 'Contact',
   MotionSensor = 'MotionSensor'
 }

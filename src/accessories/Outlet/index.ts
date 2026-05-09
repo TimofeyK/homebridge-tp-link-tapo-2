@@ -15,7 +15,7 @@ export type AccessoryThisType = ThisType<{
   readonly mac: string;
 }>;
 
-export default class LightBulbAccessory extends Accessory {
+export default class OutletAccessory extends Accessory {
   private readonly service: Service;
 
   public get UUID() {

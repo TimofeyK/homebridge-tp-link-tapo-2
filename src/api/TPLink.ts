@@ -2,32 +2,18 @@ import AsyncLock from 'async-lock';
 
 import { ChildInfo } from './@types/ChildListInfo';
 import DeviceInfo from './@types/DeviceInfo';
-import Protocol from './@types/Protocol';
 import { Logger } from 'homebridge';
-import LegacyAPI from './LegacyAPI';
 import commands from './commands';
 import KlapAPI from './KlapAPI';
-import API from './@types/API';
-
-export interface HandshakeData {
-  cookie?: string;
-  expire: number;
-}
 
 type Commands = typeof commands;
 type Command = keyof Commands;
 type CommandReturnType<T extends Command> = ReturnType<Commands[T]>;
 
 export default class TPLink {
-  public get protocol(): Protocol {
-    return this._protocol;
-  }
-
-  private _protocol: Protocol = Protocol.Legacy;
-
   private readonly lock: AsyncLock;
 
-  private api: API;
+  private api: KlapAPI;
 
   private classSetup = false;
 
@@ -64,28 +50,15 @@ export default class TPLink {
     private readonly log: Logger
   ) {
     this.lock = new AsyncLock();
-    this.api = new LegacyAPI(ip, email, password, log);
+    this.api = new KlapAPI(ip, email, password, log);
   }
 
   public async setup(): Promise<TPLink> {
-    try {
-      if (this.classSetup) {
-        return this;
-      }
-
-      await this.api.setup();
-
-      this._protocol = await this.checkProtocol();
-      if (this._protocol === Protocol.KLAP) {
-        this.api = new KlapAPI(this.ip, this.email, this.password, this.log);
-        await this.api.setup();
-      }
-
-      this.classSetup = true;
-    } catch (e) {
-      this.log.error('Error setting up TPLink class:', e);
+    if (this.classSetup) {
+      return this;
     }
 
+    this.classSetup = true;
     return this;
   }
 
@@ -200,13 +173,11 @@ export default class TPLink {
         return false as CommandReturnType<T>;
       }
 
-      if (this.api.needsNewHandshake() || this.tryResendCommand) {
-        if (this.tryResendCommand) {
-          this.log.info('Trying to login again.');
-        }
-
-        await this.api.login();
+      if (this.tryResendCommand) {
+        this.log.info('Session expired, forcing new handshake.');
       }
+
+      const forceHandshake = this.tryResendCommand;
 
       const { __method__, ...params } = commands[command.toString()](...args);
       const validMethod = __method__ ?? 'set_device_info';
@@ -246,8 +217,7 @@ export default class TPLink {
           ...extraData,
           ...params
         },
-        true,
-        false
+        forceHandshake
       );
 
       if (body.error_code && body.error_code !== 0) {
@@ -275,24 +245,5 @@ export default class TPLink {
       this.tryResendCommand = false;
       return null as CommandReturnType<T>;
     }
-  }
-
-  private async checkProtocol(): Promise<Protocol> {
-    try {
-      this.log.debug('Checking protocol');
-      const response = await this.api.sendRequest('component_nego', {}, false);
-      if (response.data.error_code === 1003) {
-        this.log.debug(`Using KLAP protocol for ${this.ip}`);
-        return Protocol.KLAP;
-      }
-    } catch (e: any) {
-      this.log.debug(
-        'Protocol error response:',
-        JSON.stringify(e?.response?.data || e?.response || e)
-      );
-    }
-
-    this.log.debug(`Using legacy protocol for ${this.ip}`);
-    return Protocol.Legacy;
   }
 }

@@ -1,40 +1,28 @@
-import axios, { AxiosResponse, ResponseType } from 'axios';
 import { Logger } from 'homebridge';
 import AsyncLock from 'async-lock';
 import crypto from 'crypto';
-import http from 'http';
 
 import KlapCipher from './KlapCipher';
-import API from './@types/API';
 
-export default class KlapAPI extends API {
+export default class KlapAPI {
   private static readonly TP_TEST_USER = 'test@tp-link.net';
   private static readonly TP_TEST_PASSWORD = 'test';
 
   private readonly lock: AsyncLock;
+  private readonly rawEmail: string;
+  private readonly rawPassword: string;
 
   private session?: Session;
 
   constructor(
-    protected readonly ip: string,
-    protected readonly email: string,
-    protected readonly password: string,
-    protected readonly log: Logger
+    private readonly ip: string,
+    email: string,
+    password: string,
+    private readonly log: Logger
   ) {
-    super(ip, email, password, log);
+    this.rawEmail = email;
+    this.rawPassword = password;
     this.lock = new AsyncLock();
-  }
-
-  public async login() {
-    this.log.debug('[KLAP] Legacy login that does nothing, ignore this');
-  }
-
-  public async setup() {
-    this.log.debug('[KLAP] Legacy setup that does nothing, ignore this');
-  }
-
-  public async sendRequest(): Promise<AxiosResponse<any, any>> {
-    throw new Error('[KLAP] Legacy Method should not be called');
   }
 
   public async sendSecureRequest(
@@ -42,11 +30,9 @@ export default class KlapAPI extends API {
     params: {
       [key: string]: any;
     },
-    _: boolean,
     forceHandshake = false
   ): Promise<{
     body: any;
-    response: AxiosResponse<any, any>;
   }> {
     await this.handshake(forceHandshake);
 
@@ -59,32 +45,39 @@ export default class KlapAPI extends API {
     const requestData = this.session!.cipher!.encrypt(rawRequest);
 
     try {
-      const response = await this.sessionPost(
-        '/request',
-        requestData.encrypted,
-        'arraybuffer',
-        this.session!.Cookie,
-        {
-          seq: requestData.seq.toString()
+      const url = new URL(`http://${this.ip}/app/request`);
+      url.searchParams.set('seq', requestData.seq.toString());
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          Host: this.ip,
+          Accept: '*/*',
+          'Content-Type': 'application/octet-stream',
+          Cookie: this.session!.Cookie
+        },
+        body: requestData.encrypted
+      });
+
+      if (!response.ok) {
+        if (response.status === 403 && !forceHandshake) {
+          this.log.warn('[KLAP] Forbidden. Redoing the request with a token regeneration.');
+          return this.sendSecureRequest(method, params, true);
         }
-      );
-  
-      if (response.status !== 200) {
-        throw new Error('[KLAP] Request failed');
+        throw new Error(`[KLAP] Request failed with status ${response.status}`);
       }
-  
-      const data = JSON.parse(this.session!.cipher!.decrypt(response.data));
-  
+
+      const responseBuffer = Buffer.from(await response.arrayBuffer());
+      const data = JSON.parse(this.session!.cipher!.decrypt(responseBuffer));
+
       return {
-        response,
         body: data
       };
-    } catch(error:any) {
-      if(error.response?.status === 403 && !forceHandshake) {
-        this.log.warn("[KLAP] Forbidden. Redoing the request with a token regeneration.");
-        return this.sendSecureRequest(method, params, _, true);
+    } catch (error: any) {
+      if (error.cause?.code === 'ECONNREFUSED' || error.message?.includes('fetch failed')) {
+        throw new Error(`[KLAP] Request failed: ${error.message}`);
       }
-      throw new Error(`[KLAP] Request failed: ${error}`);
+      throw error;
     }
   }
 
@@ -124,20 +117,19 @@ export default class KlapAPI extends API {
 
     const handshake1Result = await this.sessionPost(
       '/handshake1',
-      localSeed,
-      'arraybuffer'
+      localSeed
     );
 
-    if (handshake1Result.status !== 200) {
+    if (!handshake1Result.ok) {
       throw new Error('Handshake1 failed');
     }
 
-    if (handshake1Result.headers['content-length'] !== '48') {
+    if (handshake1Result.headers.get('content-length') !== '48') {
       throw new Error('Handshake1 failed due to invalid content length');
     }
 
-    const cookie = handshake1Result.headers['set-cookie']?.[0];
-    const data = handshake1Result.data;
+    const cookie = handshake1Result.headers.get('set-cookie');
+    const data = Buffer.from(await handshake1Result.arrayBuffer());
 
     const [cookieValue, timeout] = cookie!.split(';');
     const timeoutValue = timeout.split('=').pop();
@@ -147,14 +139,7 @@ export default class KlapAPI extends API {
     const remoteSeed: Buffer = data.subarray(0, 16);
     const serverHash: Buffer = data.subarray(16);
 
-    this.log.debug(
-      '[KLAP] First handshake decoded successfully:\nRemote Seed:',
-      remoteSeed.toString('hex'),
-      '\nServer Hash:',
-      serverHash.toString('hex'),
-      '\nCookie:',
-      cookieValue
-    );
+    this.log.debug('[KLAP] First handshake completed');
 
     const localHash = this.hashAuth(this.rawEmail, this.rawPassword);
     const localAuthHash = this.sha256(
@@ -217,11 +202,10 @@ export default class KlapAPI extends API {
       const handshake2Result = await this.sessionPost(
         '/handshake2',
         localAuthHash,
-        'text',
         this.session!.Cookie
       );
 
-      if (handshake2Result.status === 200) {
+      if (handshake2Result.ok) {
         this.log.debug('[KLAP] Second handshake successful');
         this.session = this.session!.completeHandshake(
           new KlapCipher(localSeed, remoteSeed, authHash)
@@ -230,11 +214,11 @@ export default class KlapAPI extends API {
         return;
       }
 
-      this.log.warn('[KLAP] Second handshake failed', handshake2Result.data);
+      this.log.warn('[KLAP] Second handshake failed', await handshake2Result.text());
     } catch (e: any) {
       this.log.error(
         '[KLAP] Second handshake failed:',
-        e.response.data || e.message
+        e.message
       );
     }
 
@@ -244,13 +228,10 @@ export default class KlapAPI extends API {
   private async sessionPost(
     path: string,
     payload: Buffer,
-    responseType: ResponseType,
-    cookie?: string,
-    params?: Record<string, unknown>
+    cookie?: string
   ) {
-    return axios.post(`http://${this.ip}/app${path}`, payload, {
-      responseType: responseType,
-      params: params,
+    return fetch(`http://${this.ip}/app${path}`, {
+      method: 'POST',
       headers: {
         Host: this.ip,
         Accept: '*/*',
@@ -259,9 +240,7 @@ export default class KlapAPI extends API {
           Cookie: cookie
         })
       },
-      httpAgent: new http.Agent({
-        keepAlive: false
-      })
+      body: payload
     });
   }
 

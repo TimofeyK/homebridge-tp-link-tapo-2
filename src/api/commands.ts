@@ -61,10 +61,6 @@ export default {
       alarm_type: 'Alarm 4',
       alarm_volume: 'medium'
     } as any),
-  getAlarmTypes: (): boolean =>
-    ({
-      __method__: 'get_support_alarm_type_list'
-    } as any),
   getCurrentPower: (): { current_power: number } =>
     ({
       __method__: 'get_current_power'
