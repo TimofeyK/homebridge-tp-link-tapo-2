@@ -121,7 +121,10 @@ export default class KlapAPI {
     );
 
     if (!handshake1Result.ok) {
-      throw new Error('Handshake1 failed');
+      const body = await handshake1Result.text().catch(() => '');
+      throw new Error(
+        `Handshake1 failed with status ${handshake1Result.status}: ${body}`
+      );
     }
 
     if (handshake1Result.headers.get('content-length') !== '48') {

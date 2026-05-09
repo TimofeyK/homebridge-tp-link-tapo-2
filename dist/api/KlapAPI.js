@@ -91,7 +91,8 @@ class KlapAPI {
         const localSeed = seed ? seed : crypto_1.default.randomBytes(16);
         const handshake1Result = await this.sessionPost('/handshake1', localSeed);
         if (!handshake1Result.ok) {
-            throw new Error('Handshake1 failed');
+            const body = await handshake1Result.text().catch(() => '');
+            throw new Error(`Handshake1 failed with status ${handshake1Result.status}: ${body}`);
         }
         if (handshake1Result.headers.get('content-length') !== '48') {
             throw new Error('Handshake1 failed due to invalid content length');
