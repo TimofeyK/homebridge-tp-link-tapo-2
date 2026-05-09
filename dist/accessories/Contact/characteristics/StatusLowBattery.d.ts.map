@@ -1,0 +1,1 @@
+{"version":3,"file":"StatusLowBattery.d.ts","sourceRoot":"","sources":["../../../../src/accessories/Contact/characteristics/StatusLowBattery.ts"],"names":[],"mappings":"AAAA,OAAO,EACL,wBAAwB,EAGzB,MAAM,YAAY,CAAC;AAEpB,OAAO,EAAE,iBAAiB,EAAE,MAAM,IAAI,CAAC;AAEvC,QAAA,MAAM,cAAc,EAAE;IACpB,GAAG,EAAE,wBAAwB,CAAC;CAC/B,GAAG,iBAKH,CAAC;AAEF,eAAe,cAAc,CAAC"}

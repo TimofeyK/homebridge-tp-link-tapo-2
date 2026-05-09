@@ -1,0 +1,1 @@
+{"version":3,"file":"StatusLowBattery.js","sourceRoot":"","sources":["../../../../src/accessories/Contact/characteristics/StatusLowBattery.ts"],"names":[],"mappings":";;AAQA,MAAM,cAAc,GAEI;IACtB,GAAG,EAAE,KAAK;QACR,MAAM,UAAU,GAAG,MAAM,IAAI,CAAC,OAAO,EAAE,CAAC;QACxC,OAAO,UAAU,CAAC,cAAc,CAAC;IACnC,CAAC;CACF,CAAC;AAEF,kBAAe,cAAc,CAAC"}
