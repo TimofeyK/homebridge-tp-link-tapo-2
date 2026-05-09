@@ -54,6 +54,8 @@ export default class KlapAPI {
           Host: this.ip,
           Accept: '*/*',
           'Content-Type': 'application/octet-stream',
+          'Content-Length': requestData.encrypted.length.toString(),
+          Connection: 'close',
           Cookie: this.session!.Cookie
         },
         body: requestData.encrypted
@@ -239,6 +241,8 @@ export default class KlapAPI {
         Host: this.ip,
         Accept: '*/*',
         'Content-Type': 'application/octet-stream',
+        'Content-Length': payload.length.toString(),
+        Connection: 'close',
         ...(cookie && {
           Cookie: cookie
         })
