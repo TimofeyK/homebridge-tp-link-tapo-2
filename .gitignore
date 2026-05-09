@@ -117,4 +117,5 @@ web_modules/
 .yarn/cache
 .yarn/unplugged
 .yarn/build-state.yml
-.pnp.*.DS_Store
+.pnp.*
+.DS_Store
